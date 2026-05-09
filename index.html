@@ -9,13 +9,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
 </head>
 <body>
     <div class="app-container">
         <header class="app-header">
             <div class="logo">
                 <span class="logo-icon">🚀</span>
-                <h1>AI Layout Assistant <span class="badge">DeepSeek</span></h1>
+                <h1>AI Layout Assistant <span class="badge">Qwen Free</span></h1>
             </div>
             <div class="header-actions">
                 <button id="settings-toggle" class="btn-secondary">
@@ -28,11 +29,27 @@
             <!-- Левая панель -->
             <section class="panel panel-input">
                 <div class="panel-header">
-                    <h2>Входной текст</h2>
+                    <div class="panel-header-left">
+                        <h2>Входной текст</h2>
+                        <button id="word-load-btn" class="btn-word-upload">
+                            <span class="icon">📄</span> Word
+                        </button>
+                        <input type="file" id="word-upload" accept=".doc,.docx" hidden>
+                    </div>
                     <div class="input-meta"><span id="char-count">0</span> / 15000</div>
                 </div>
                 <div class="panel-content">
-                    <textarea id="user-text" placeholder="Вставьте сюда текст для верстки..."></textarea>
+                    <div id="input-container">
+                        <textarea id="user-text" placeholder="Вставьте сюда текст для верстки..."></textarea>
+                        <div id="drop-zone" class="drop-zone hidden">
+                            <div class="drop-zone-content">
+                                <div class="drop-icon">📂</div>
+                                <p>Перетащите Word файл сюда</p>
+                                <span>или нажмите для выбора</span>
+                            </div>
+                            <button id="back-to-text" class="btn-link">Вернуться к тексту</button>
+                        </div>
+                    </div>
                     <div class="action-group">
                         <button id="generate-btn" class="btn-primary-main">
                             <span class="btn-text">Запустить генерацию</span>
@@ -61,6 +78,7 @@
                         <button class="tab-btn active" data-tab="preview">Превью</button>
                         <button class="tab-btn" data-tab="html">HTML</button>
                         <button class="tab-btn" data-tab="css">CSS</button>
+                        <button class="tab-btn" data-tab="schema">Schema</button>
                     </div>
                     <button id="copy-btn" class="btn-premium-copy">
                         <span class="icon">📋</span> 
@@ -76,6 +94,9 @@
                     </div>
                     <div id="css-tab" class="tab-content">
                         <div class="code-wrapper"><pre id="output-css"><code class="language-css"></code></pre></div>
+                    </div>
+                    <div id="schema-tab" class="tab-content">
+                        <div class="code-wrapper"><pre id="output-schema"><code class="language-json"></code></pre></div>
                     </div>
                 </div>
             </section>
