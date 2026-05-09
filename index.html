@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Layout Assistant | Pro Editor</title>
+    <meta http-equiv="Permissions-Policy" content="unload=*">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo">
+                <span class="logo-icon">🚀</span>
+                <h1>AI Layout Assistant <span class="badge">DeepSeek</span></h1>
+            </div>
+            <div class="header-actions">
+                <button id="settings-toggle" class="btn-secondary">
+                    <span class="icon">⚙️</span> Конфигурация
+                </button>
+            </div>
+        </header>
+
+        <main class="app-main">
+            <!-- Левая панель -->
+            <section class="panel panel-input">
+                <div class="panel-header">
+                    <h2>Входной текст</h2>
+                    <div class="input-meta"><span id="char-count">0</span> / 15000</div>
+                </div>
+                <div class="panel-content">
+                    <textarea id="user-text" placeholder="Вставьте сюда текст для верстки..."></textarea>
+                    <div class="action-group">
+                        <button id="generate-btn" class="btn-primary-main">
+                            <span class="btn-text">Запустить генерацию</span>
+                            <div class="loader hidden"><span></span><span></span><span></span></div>
+                        </button>
+                        <button id="stop-btn" class="btn-stop hidden">
+                            <span class="icon">🛑</span> Остановить
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Правая панель -->
+            <section class="panel panel-output">
+                <!-- Новый статус-бар генерации -->
+                <div id="generation-status" class="generation-status idle">
+                    <div class="status-content">
+                        <span class="status-icon"></span>
+                        <span class="status-label">Готов к работе</span>
+                    </div>
+                    <div class="progress-bar"><div class="progress-fill"></div></div>
+                </div>
+
+                <div class="panel-header">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="preview">Превью</button>
+                        <button class="tab-btn" data-tab="html">HTML</button>
+                        <button class="tab-btn" data-tab="css">CSS</button>
+                    </div>
+                    <button id="copy-btn" class="btn-premium-copy">
+                        <span class="icon">📋</span> 
+                        <span class="text">Копировать результат</span>
+                    </button>
+                </div>
+                <div class="panel-content">
+                    <div id="preview-tab" class="tab-content active">
+                        <iframe id="preview-frame" title="Preview"></iframe>
+                    </div>
+                    <div id="html-tab" class="tab-content">
+                        <div class="code-wrapper"><pre id="output-html"><code class="language-html"></code></pre></div>
+                    </div>
+                    <div id="css-tab" class="tab-content">
+                        <div class="code-wrapper"><pre id="output-css"><code class="language-css"></code></pre></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Модальное окно настроек -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>Конфигурация эталона</h2>
+                <button id="settings-close" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-content">
+                <div class="settings-grid">
+                    <div class="settings-group full-width" style="display:none;">
+                        <input type="password" id="api-key">
+                    </div>
+                    <div class="settings-group">
+                        <label>Эталонный CSS</label>
+                        <textarea id="golden-css" class="code-editor" placeholder="Введите CSS эталона..."></textarea>
+                    </div>
+                    <div class="settings-group">
+                        <label>Эталонный HTML</label>
+                        <textarea id="golden-html" class="code-editor" placeholder="Введите HTML эталона..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <p class="hint">Настройки сохраняются автоматически в браузере</p>
+                <button id="settings-save-close" class="btn-save-pro">Сохранить всё</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
