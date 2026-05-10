@@ -1,0 +1,19 @@
+# Секретные ключи и настройки
+.env
+config.js
+
+# Логи и временные файлы
+*.log
+npm-debug.log*
+.DS_Store
+
+# Папки зависимостей
+node_modules/
+
+# База данных (дампы)
+*.sql
+!database.sql
+
+# Настройки IDE
+.vscode/
+.idea/
