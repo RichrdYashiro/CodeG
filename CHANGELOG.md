@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-05-10
+### Added
+- **MySQL Integration**: Complete migration of history from localStorage to a server-side MySQL database.
+- **PHP Backend API**: Implemented `api.php` to handle data synchronization, security, and version control.
+- **Authentication System**: Full-featured user registration and login system using PHP sessions and secure password hashing.
+- **Dedicated History Modal**: Replaced the bottom history bar with a professional full-screen modal featuring cards and code previews.
+- **Vibrant SaaS UI**: Complete visual redesign with a light Indigo/White theme, soft shadows, and improved spacing.
+- **Section Constructor (Stack)**: New "Add to Stack" feature allowing users to combine multiple generated blocks into one project.
+- **Smart Table Rules**: Enhanced system prompts to ensure semantic and responsive HTML table generation.
+- **Database Dump**: Included `database.sql` for quick environment setup.
+
+### Changed
+- **Unified Model Routing**: Transitioned to `openrouter/free` for all modes to ensure maximum stability and availability.
+- **Input Experience**: Simplified the left panel, removing tabs in favor of a clean, focused text and file upload area.
+
+### Fixed
+- **History Sync**: Resolved issues with history persistence across different devices/browsers via centralized storage.
+- **Navigation**: Improved modal transitions and state management during Auth flows.
+
+
 ## [0.3.0] - 2026-05-10
 ### Added
 - **AI Reference Parsing**: Automatic splitting of uploaded reference files into HTML and CSS using AI.
