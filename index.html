@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Layout Assistant | Pro Editor</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✨</text></svg>">
     <meta http-equiv="Permissions-Policy" content="unload=*">
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,18 +14,30 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
         rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 
 <body>
     <div class="app-container">
         <header class="app-header">
             <div class="logo">
-                <span class="logo-icon">🚀</span>
-                <h1>AI Layout Assistant <span class="badge">Gemini Free</span></h1>
+                <span class="logo-icon">✨</span>
+                <h1>AI Layout Assistant <span class="badge">PRO</span></h1>
             </div>
             <div class="header-actions">
+                <div id="user-info" class="hidden">
+                    <span id="display-username" style="font-size: 0.85rem; font-weight: 700; color: var(--accent);"></span>
+                    <button id="logout-btn" class="btn-link" style="padding: 0; margin-left: 10px;">Выйти</button>
+                </div>
+                <button id="auth-btn" class="btn-secondary">
+                    <span class="icon">👤</span> Войти
+                </button>
+                <button id="history-toggle" class="btn-secondary">
+                    <span class="icon">🕒</span> История
+                </button>
                 <button id="settings-toggle" class="btn-secondary">
-                    <span class="icon">⚙️</span> Конфигурация
+                    <span class="icon">⚙️</span> Настройки
                 </button>
             </div>
         </header>
@@ -35,33 +48,25 @@
                 <div class="panel-header">
                     <div class="panel-header-left">
                         <h2>Входной текст</h2>
-                        <button id="word-load-btn" class="btn-word-upload">
-                            <span class="icon">📄</span> Word
+                        <button id="file-load-btn" class="btn-word-upload">
+                            <span class="icon">📁</span> Файл
                         </button>
-                        <input type="file" id="word-upload" accept=".doc,.docx" hidden>
+                        <input type="file" id="file-upload" accept=".doc,.docx,.pdf,.pptx,.txt" hidden>
                     </div>
-                    <div class="input-meta"><span id="char-count">0</span> / 15000</div>
+                    <button id="back-to-text" class="btn-link hidden">← Назад к вводу текста</button>
                 </div>
                 <div class="panel-content">
                     <div id="input-container">
-                        <textarea id="user-text" placeholder="Вставьте сюда текст для верстки..."></textarea>
-                        <div id="drop-zone" class="drop-zone hidden">
-                            <div class="drop-zone-content">
-                                <div class="drop-icon">📂</div>
-                                <p>Перетащите Word файл сюда</p>
-                                <span>или нажмите для выбора</span>
-                            </div>
-                            <button id="back-to-text" class="btn-link">Вернуться к тексту</button>
+                        <textarea id="user-text" placeholder="Вставьте текст или перетащите файл сюда..."></textarea>
+                        <div id="drop-zone" class="drop-zone">
+                            <div class="drop-icon">📄</div>
+                            <p>Перетащите файл сюда</p>
+                            <span>Word, PDF, PPTX или TXT</span>
                         </div>
                     </div>
                     <div class="action-group">
-                        <button id="generate-btn" class="btn-primary-main">
-                            <span class="btn-text">Запустить генерацию</span>
-                            <div class="loader hidden"><span></span><span></span><span></span></div>
-                        </button>
-                        <button id="stop-btn" class="btn-stop hidden">
-                            <span class="icon">🛑</span> Остановить
-                        </button>
+                        <button id="generate-btn" class="btn-primary-main">Сгенерировать верстку</button>
+                        <button id="stop-btn" class="btn-stop hidden">Остановить</button>
                     </div>
                 </div>
             </section>
@@ -89,10 +94,15 @@
                         <button class="tab-btn" data-tab="css">CSS</button>
                         <button class="tab-btn" data-tab="schema">Schema</button>
                     </div>
-                    <button id="copy-btn" class="btn-premium-copy">
-                        <span class="icon">📋</span>
-                        <span class="text">Копировать результат</span>
-                    </button>
+                    <div class="header-right-group">
+                        <button id="add-to-stack-btn" class="btn-secondary" title="Добавить блок в конструктор">
+                            <span class="icon">➕</span> В стек
+                        </button>
+                        <button id="copy-btn" class="btn-premium-copy">
+                            <span class="icon">📋</span>
+                            <span class="text">Копировать</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="panel-content">
                     <div id="preview-tab" class="tab-content active">
@@ -115,7 +125,6 @@
                     </div>
                 </div>
 
-                <!-- Панель уточнения верстки -->
                 <div id="feedback-panel" class="feedback-section hidden">
                     <div class="feedback-input-wrapper">
                         <textarea id="feedback-text" placeholder="Что нужно исправить в этой верстке? (например: сделай шрифт больше или добавь отступы)"></textarea>
@@ -130,6 +139,51 @@
                 </div>
             </section>
         </main>
+    </div>
+
+    <!-- Модальное окно авторизации -->
+    <div id="auth-modal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-container" style="max-width: 450px; height: auto; min-height: 400px;">
+            <div class="modal-header">
+                <h2 id="auth-title">Войти в аккаунт</h2>
+                <button id="close-auth" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-content" style="padding: 30px;">
+                <div class="settings-group" style="margin-bottom: 20px;">
+                    <label>Имя пользователя</label>
+                    <input type="text" id="auth-username" class="code-editor" style="min-height: 50px; padding: 12px;">
+                </div>
+                <div class="settings-group" style="margin-bottom: 24px;">
+                    <label>Пароль</label>
+                    <input type="password" id="auth-password" class="code-editor" style="min-height: 50px; padding: 12px;">
+                </div>
+                <button id="auth-submit-btn" class="btn-primary-main" style="width: 100%;">Войти</button>
+                <div style="text-align: center; margin-top: 20px;">
+                    <button id="toggle-auth-mode" class="btn-link">Нет аккаунта? Зарегистрироваться</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно истории -->
+    <div id="history-modal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-container history-modal-container">
+            <div class="modal-header">
+                <h2>История генераций</h2>
+                <button id="close-history" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-content">
+                <div id="history-grid" class="history-grid">
+                    <!-- Карточки истории будут тут -->
+                </div>
+                <div id="history-modal-empty" class="history-empty-state">
+                    <span class="icon">🕒</span>
+                    <p>История пока пуста. Сгенерируйте свою первую верстку!</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Модальное окно настроек -->

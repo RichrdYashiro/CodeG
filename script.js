@@ -5,6 +5,119 @@ let genTimerInterval = null;
 let genStartTime = 0;
 let isRefProcessing = false;
 
+// История версток
+let layoutHistory = [];
+let historyIndex = -1;
+
+// Стек секций (Конструктор)
+let layoutStack = [];
+
+// Данные для Vision
+let currentVisionBase64 = null;
+
+async function pushToHistory(html, css, schema) {
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    
+    // Локальное сохранение
+    layoutHistory.push({ html, css, schema, timestamp: timeStr });
+    historyIndex = layoutHistory.length - 1;
+
+    // Сохранение в MySQL через PHP
+    try {
+        await fetch('api.php?action=save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ html, css, schema, name: timeStr })
+        });
+    } catch (e) {
+        console.error('Ошибка сохранения в БД:', e);
+    }
+}
+
+async function updateHistoryUI() {
+    const historyModal = document.getElementById('history-modal');
+    const historyGrid = document.getElementById('history-grid');
+    const emptyState = document.getElementById('history-modal-empty');
+    if (!historyGrid || !emptyState) return;
+
+    try {
+        const response = await fetch('api.php?action=list');
+        const dbHistory = await response.json();
+
+        if (!dbHistory || dbHistory.length === 0) {
+            historyGrid.innerHTML = '';
+            emptyState.classList.remove('hidden');
+            return;
+        }
+
+        emptyState.classList.add('hidden');
+        historyGrid.innerHTML = '';
+        
+        dbHistory.forEach((item) => {
+            const card = document.createElement('div');
+            card.className = `history-card`;
+            
+            const previewText = (item.preview || '').replace(/<[^>]*>?/gm, ' ').trim() + '...';
+            
+            card.innerHTML = `
+                <div class="history-card-header">
+                    <span class="history-card-time">${item.timestamp}</span>
+                    <span class="history-card-version">ID: ${item.id}</span>
+                </div>
+                <div class="history-card-preview">${previewText}</div>
+            `;
+            
+            card.onclick = () => loadVersionFromDB(item.id);
+            historyGrid.appendChild(card);
+        });
+    } catch (e) {
+        console.error('Ошибка загрузки истории:', e);
+    }
+}
+
+async function loadVersionFromDB(id) {
+    try {
+        const response = await fetch(`api.php?action=get&id=${id}`);
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+
+        const outputHtml = document.getElementById('output-html').querySelector('code');
+        const outputCss = document.getElementById('output-css').querySelector('code');
+        const outputSchema = document.getElementById('output-schema').querySelector('code');
+        const previewFrame = document.getElementById('preview-frame');
+
+        updateStreamingUI(`###HTML###${data.html_code}###CSS###${data.css_code}###SCHEMA###${data.schema_json}`, outputHtml, outputCss, outputSchema, previewFrame, true);
+        
+        document.getElementById('history-modal').classList.add('hidden');
+    } catch (e) {
+        alert('Ошибка загрузки версии: ' + e.message);
+    }
+}
+
+function jumpToHistory(index) {
+    if (index >= 0 && index < layoutHistory.length) {
+        historyIndex = index;
+        const state = layoutHistory[historyIndex];
+        
+        const outputHtml = document.getElementById('output-html').querySelector('code');
+        const outputCss = document.getElementById('output-css').querySelector('code');
+        const outputSchema = document.getElementById('output-schema').querySelector('code');
+        const previewFrame = document.getElementById('preview-frame');
+        
+        if (outputHtml) outputHtml.textContent = state.html;
+        if (outputCss) outputCss.textContent = state.css;
+        if (outputSchema) outputSchema.textContent = state.schema;
+        
+        updateStreamingUI(`###HTML###${state.html}###CSS###${state.css}###SCHEMA###${state.schema}`, outputHtml, outputCss, outputSchema, previewFrame, true);
+        
+        updateHistoryUI();
+    }
+}
+
+function navigateHistory(direction) {
+    jumpToHistory(historyIndex + direction);
+}
+
 function startGenTimer() {
     const timerEl = document.getElementById('gen-timer');
     if (!timerEl) return;
@@ -37,9 +150,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const copyBtn = document.getElementById('copy-btn');
     const applyConfigBtn = document.getElementById('apply-config-btn');
     
-    // Word Upload & Drop Zone
-    const wordLoadBtn = document.getElementById('word-load-btn');
-    const wordUploadInput = document.getElementById('word-upload');
+    // File Upload & Drop Zone
+    const fileLoadBtn = document.getElementById('file-load-btn');
+    const fileUploadInput = document.getElementById('file-upload');
     const dropZone = document.getElementById('drop-zone');
     const backToTextBtn = document.getElementById('back-to-text');
     
@@ -228,10 +341,186 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // Управление модальным окном истории
+    const historyToggle = document.getElementById('history-toggle');
+    const historyModal = document.getElementById('history-modal');
+    const closeHistory = document.getElementById('close-history');
+    if (historyToggle) {
+        historyToggle.addEventListener('click', () => {
+            updateHistoryUI();
+            historyModal.classList.remove('hidden');
+        });
+    }
+    if (closeHistory) {
+        closeHistory.addEventListener('click', () => historyModal.classList.add('hidden'));
+    }
+
+    // Переключение вкладок ввода
+    const inputTabs = document.querySelectorAll('[data-input-tab]');
+    inputTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            inputTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            const targetId = tab.dataset.inputTab + '-input-tab';
+            document.querySelectorAll('.input-tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(targetId).classList.add('active');
+        });
+    });
+
+    // Vision Upload
+    const visionDropZone = document.getElementById('vision-drop-zone');
+    const visionUpload = document.getElementById('vision-upload');
+    const visionPreview = document.getElementById('vision-preview');
+    const visionImgPreview = document.getElementById('vision-img-preview');
+    const clearVision = document.getElementById('clear-vision');
+
+    if (visionDropZone) {
+        visionDropZone.addEventListener('click', () => visionUpload.click());
+        visionDropZone.addEventListener('dragover', (e) => { e.preventDefault(); visionDropZone.classList.add('drag-over'); });
+        visionDropZone.addEventListener('dragleave', () => visionDropZone.classList.remove('drag-over'));
+        visionDropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            visionDropZone.classList.remove('drag-over');
+            handleVisionFile(e.dataTransfer.files[0]);
+        });
+    }
+
+    if (visionUpload) {
+        visionUpload.addEventListener('change', (e) => handleVisionFile(e.target.files[0]));
+    }
+
+    if (clearVision) {
+        clearVision.addEventListener('click', () => {
+            currentVisionBase64 = null;
+            visionPreview.classList.add('hidden');
+            visionDropZone.classList.remove('hidden');
+        });
+    }
+
+    function handleVisionFile(file) {
+        if (!file || !file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            currentVisionBase64 = e.target.result;
+            visionImgPreview.src = currentVisionBase64;
+            visionPreview.classList.remove('hidden');
+            visionDropZone.classList.add('hidden');
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // Конструктор (Стек)
+    const addToStackBtn = document.getElementById('add-to-stack-btn');
+    if (addToStackBtn) {
+        addToStackBtn.addEventListener('click', () => {
+            const html = document.getElementById('output-html').querySelector('code').textContent;
+            const css = document.getElementById('output-css').querySelector('code').textContent;
+            if (!html) return alert('Сначала сгенерируйте блок!');
+            
+            layoutStack.push({ html, css });
+            alert(`Блок добавлен в стек! Всего блоков: ${layoutStack.length}`);
+            
+            // Если блоков больше 1, предлагаем "Собрать всё"
+            if (layoutStack.length > 1) {
+                const combinedHtml = layoutStack.map(s => s.html).join('\n\n');
+                const combinedCss = layoutStack.map(s => s.css).join('\n\n');
+                // Можно добавить кнопку "Просмотреть весь стек"
+            }
+        });
+    }
     
+    // --- АВТОРИЗАЦИЯ (Логика) ---
+    const authBtn = document.getElementById('auth-btn');
+    const authModal = document.getElementById('auth-modal');
+    const closeAuth = document.getElementById('close-auth');
+    const authSubmitBtn = document.getElementById('auth-submit-btn');
+    const toggleAuthMode = document.getElementById('toggle-auth-mode');
+    const authTitle = document.getElementById('auth-title');
+    const logoutBtn = document.getElementById('logout-btn');
+    const userInfo = document.getElementById('user-info');
+    const displayUsername = document.getElementById('display-username');
+
+    let isLoginMode = true;
+
+    async function checkAuthStatus() {
+        try {
+            const res = await fetch('api.php?action=check_auth');
+            const data = await res.json();
+            if (data.logged_in) {
+                authBtn.classList.add('hidden');
+                userInfo.classList.remove('hidden');
+                displayUsername.textContent = data.username;
+            } else {
+                authBtn.classList.remove('hidden');
+                userInfo.classList.add('hidden');
+            }
+        } catch (e) {}
+    }
+
+    if (authBtn) {
+        authBtn.addEventListener('click', () => authModal.classList.remove('hidden'));
+    }
+    if (closeAuth) {
+        closeAuth.addEventListener('click', () => authModal.classList.add('hidden'));
+    }
+
+    if (toggleAuthMode) {
+        toggleAuthMode.addEventListener('click', () => {
+            isLoginMode = !isLoginMode;
+            authTitle.textContent = isLoginMode ? 'Войти в аккаунт' : 'Регистрация';
+            authSubmitBtn.textContent = isLoginMode ? 'Войти' : 'Создать аккаунт';
+            toggleAuthMode.textContent = isLoginMode ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти';
+        });
+    }
+
+    if (authSubmitBtn) {
+        authSubmitBtn.addEventListener('click', async () => {
+            const username = document.getElementById('auth-username').value.trim();
+            const password = document.getElementById('auth-password').value.trim();
+            if (!username || !password) return alert('Заполните все поля');
+
+            const action = isLoginMode ? 'login' : 'register';
+            try {
+                const res = await fetch(`api.php?action=${action}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (isLoginMode) {
+                        alert('Успешный вход!');
+                        authModal.classList.add('hidden');
+                        checkAuthStatus();
+                    } else {
+                        alert('Регистрация успешна! Теперь войдите.');
+                        isLoginMode = true;
+                        authTitle.textContent = 'Войти в аккаунт';
+                        authSubmitBtn.textContent = 'Войти';
+                    }
+                } else {
+                    alert(data.error);
+                }
+            } catch (e) {
+                alert('Ошибка сервера');
+            }
+        });
+    }
+
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+            await fetch('api.php?action=logout');
+            location.reload();
+        });
+    }
+
+    checkAuthStatus();
+
     // 4. Word File Handling & Drop Zone logic
-    if (wordLoadBtn && wordUploadInput && dropZone) {
-        wordLoadBtn.addEventListener('click', () => {
+    if (fileLoadBtn && fileUploadInput && dropZone) {
+        fileLoadBtn.addEventListener('click', () => {
             userTextarea.classList.add('hidden');
             dropZone.classList.remove('hidden');
         });
@@ -244,7 +533,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        dropZone.addEventListener('click', () => wordUploadInput.click());
+        dropZone.addEventListener('click', () => fileUploadInput.click());
 
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             dropZone.addEventListener(eventName, (e) => {
@@ -267,7 +556,7 @@ document.addEventListener('DOMContentLoaded', () => {
             handleFiles(files);
         });
         
-        wordUploadInput.addEventListener('change', (e) => {
+        fileUploadInput.addEventListener('change', (e) => {
             handleFiles(e.target.files);
             e.target.value = '';
         });
@@ -277,25 +566,94 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!file) return;
 
             if (file.size === 0) return alert('Файл пуст!');
-            if (!file.name.endsWith('.docx') && !file.name.endsWith('.doc')) return alert('Пожалуйста, выберите Word файл');
             
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-                const arrayBuffer = event.target.result;
-                try {
+            const fileName = file.name.toLowerCase();
+            const extension = fileName.substring(fileName.lastIndexOf('.'));
+            
+            try {
+                let extractedText = '';
+                
+                if (extension === '.docx' || extension === '.doc') {
+                    const arrayBuffer = await file.arrayBuffer();
                     const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
-                    if (userTextarea) {
-                        const cleanedText = cleanText(result.value);
-                        userTextarea.value = cleanedText;
-                        charCount.textContent = userTextarea.value.length;
-                        userTextarea.classList.remove('hidden');
-                        dropZone.classList.add('hidden');
-                    }
-                } catch (err) {
-                    alert('Ошибка при чтении Word файла');
+                    extractedText = result.value;
+                } else if (extension === '.pdf') {
+                    extractedText = await extractTextFromPDF(file);
+                } else if (extension === '.pptx') {
+                    extractedText = await extractTextFromPPTX(file);
+                } else if (extension === '.txt') {
+                    extractedText = await file.text();
+                } else {
+                    return alert('Поддерживаются форматы Word (.docx), PDF (.pdf), PowerPoint (.pptx) и Текст (.txt)');
                 }
-            };
-            reader.readAsArrayBuffer(file);
+
+                if (userTextarea && extractedText) {
+                    const cleanedText = cleanText(extractedText);
+                    userTextarea.value = cleanedText;
+                    charCount.textContent = userTextarea.value.length;
+                    userTextarea.classList.remove('hidden');
+                    dropZone.classList.add('hidden');
+                } else if (!extractedText) {
+                    alert('Не удалось извлечь текст из файла или файл пуст.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Ошибка при чтении файла: ' + err.message);
+            }
+        }
+
+        async function extractTextFromPDF(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdfjsLib = window['pdfjs-dist/build/pdf'];
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            
+            const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+            const pdf = await loadingTask.promise;
+            let fullText = '';
+            
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map(item => item.str).join(' ');
+                fullText += pageText + '\n\n';
+            }
+            
+            return fullText;
+        }
+
+        async function extractTextFromPPTX(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const zip = await JSZip.loadAsync(arrayBuffer);
+            let fullText = '';
+            
+            // Находим все файлы слайдов в ppt/slides/
+            const slideFiles = Object.keys(zip.files).filter(name => name.startsWith('ppt/slides/slide') && name.endsWith('.xml'));
+            
+            // Сортируем слайды по номеру
+            slideFiles.sort((a, b) => {
+                const numA = parseInt(a.match(/slide(\d+)\.xml/)[1]);
+                const numB = parseInt(b.match(/slide(\d+)\.xml/)[1]);
+                return numA - numB;
+            });
+
+            for (const slidePath of slideFiles) {
+                const slideXml = await zip.file(slidePath).async('string');
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(slideXml, 'application/xml');
+                
+                // Извлекаем текст из тегов <a:t>
+                const textNodes = xmlDoc.getElementsByTagName('a:t');
+                let slideText = '';
+                for (let i = 0; i < textNodes.length; i++) {
+                    slideText += textNodes[i].textContent + ' ';
+                }
+                
+                if (slideText.trim()) {
+                    fullText += `--- Слайд ${slidePath.match(/slide(\d+)\.xml/)[1]} ---\n${slideText}\n\n`;
+                }
+            }
+            
+            return fullText;
         }
 
         // Resizer Logic
@@ -494,8 +852,6 @@ async function generateLayoutStreaming() {
     currentAbortController = new AbortController();
 
     generateBtn.disabled = true;
-    generateBtn.querySelector('.btn-text').classList.add('hidden');
-    generateBtn.querySelector('.loader').classList.remove('hidden');
     stopBtn.classList.remove('hidden');
     
     genStatus.className = 'generation-status thinking';
@@ -507,6 +863,32 @@ async function generateLayoutStreaming() {
     let fullResponse = '';
 
     try {
+        const tableInstruction = `7. ПРАВИЛО ТАБЛИЦ: Если данные выглядят как табличные, ОБЯЗАТЕЛЬНО используй тег <table> с классами ce-table, ce-table__row, ce-table__cell.`;
+
+        const systemContent = `Ты — эксперт по БЭМ. Трансформируй текст в HTML-структуру, СТРОГО используя паттерны и классы из "Золотого стандарта". 
+                
+        ПРАВИЛА СТРУКТУРЫ:
+        1. "ЭТАЛОН HTML" — это ОБЩАЯ ОБЕРТКА (контейнер) для всей страницы/блока. 
+        2. ${useSections ? 'Используй <section class="ce-section"> как КОРНЕВОЙ элемент всей верстки.' : 'НЕ ИСПОЛЬЗУЙ тег <section> как обертку. Сразу начинай с контента или контейнера.'}
+        3. ${useContainer ? 'Внутри корневого элемента ОБЯЗАТЕЛЬНО добавь центрирующую обертку (например, <div class="ce-container">).' : 'НЕ ИСПОЛЬЗУЙ центрирующую обертку (container).'}
+        4. Внутри создавай логическую структуру, используя классы из эталона (ce-title, ce-text и т.д.).
+        5. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать любые теги заголовков (H1-H6), кроме: ${allowedHeadings.length > 0 ? allowedHeadings.join(', ') : 'ЗАГОЛОВКИ ЗАПРЕЩЕНЫ'}.
+        6. В блоке ###CSS### всегда пиши ПОЛНЫЙ набор стилей для данной верстки.
+        ${tableInstruction}
+        
+        ПРАВИЛА CSS:
+        1. РАЗДЕЛЯЙ ответ строго маркерами: ###CSS###, ###HTML### и ###SCHEMA###.
+        2. В блоке ###SCHEMA### ${schemaPrompt}
+        3. МИНИМИЗИРУЙ НОВЫЙ CSS. Сначала попытайся сверстать всё, используя ТОЛЬКО классы из "ЭТАЛОН CSS". 
+        4. НЕ ДУБЛИРУЙ стили из эталона. В блоке ###CSS### пиши ТОЛЬКО новые свойства.
+        5. Перенеси ВЕСЬ текст пользователя в HTML. НЕ СОКРАЩАЙ контент.
+        
+        ЭТАЛОН CSS:
+        ${goldenCss}
+        
+        ЭТАЛОН HTML:
+        ${goldenHtml}`;
+
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -521,36 +903,8 @@ async function generateLayoutStreaming() {
                 stream: true,
                 max_tokens: 8000,
                 messages: [
-                    {
-                        role: 'system',
-                        content: `Ты — эксперт по БЭМ. Трансформируй текст в HTML-структуру, СТРОГО используя паттерны и классы из "Золотого стандарта". 
-                        
-                        ПРАВИЛА СТРУКТУРЫ:
-                        1. "ЭТАЛОН HTML" — это ОБЩАЯ ОБЕРТКА (контейнер) для всей страницы/блока. 
-                        2. ${useSections ? 'Используй <section class="ce-section"> как КОРНЕВОЙ элемент всей верстки.' : 'НЕ ИСПОЛЬЗУЙ тег <section> как обертку. Сразу начинай с контента или контейнера.'}
-                        3. ${useContainer ? 'Внутри корневого элемента ОБЯЗАТЕЛЬНО добавь центрирующую обертку (например, <div class="ce-container">).' : 'НЕ ИСПОЛЬЗУЙ центрирующую обертку (container).'}
-                        4. Внутри создавай логическую структуру (заголовки, списки, текстовые блоки), используя классы из эталона (например, ce-title, ce-text и т.д.).
-                        5. ${allowedHeadings.length > 0 ? 'ИСПОЛЬЗУЙ ТОЛЬКО следующие теги заголовков: ' + allowedHeadings.join(', ') + '.' : 'НЕ ИСПОЛЬЗУЙ теги заголовков.'}
-                        6. В блоке ###CSS### пиши ТОЛЬКО новые свойства.
-                        
-                        ПРАВИЛА CSS:
-                        1. РАЗДЕЛЯЙ ответ строго маркерами: ###CSS###, ###HTML### и ###SCHEMA###.
-                        2. В блоке ###SCHEMA### ${schemaPrompt}
-                        3. МИНИМИЗИРУЙ НОВЫЙ CSS. Сначала попытайся сверстать всё, используя ТОЛЬКО классы из "ЭТАЛОН CSS". 
-                        4. НЕ ДУБЛИРУЙ стили из эталона. В блоке ###CSS### пиши ТОЛЬКО новые свойства.
-                        4. Новые стили создавай только для уникальных элементов, если существующих классов не хватает для красоты.
-                        5. Рассматривай ЛЮБОЙ входящий текст как контент для верстки. ОБЯЗАТЕЛЬНО перенеси ВЕСЬ текст пользователя в HTML. НЕ СОКРАЩАЙ, не обобщай и не выбрасывай фрагменты текста. Каждый абзац и каждое предложение должны найти свое место в верстке.
-                        
-                        ЭТАЛОН CSS:
-                        ${goldenCss}
-                        
-                        ЭТАЛОН HTML:
-                        ${goldenHtml}`
-                    },
-                    {
-                        role: 'user',
-                        content: `Сверстай этот текст:\n\n${userText}`
-                    }
+                    { role: 'system', content: systemContent },
+                    { role: 'user', content: `Сверстай этот текст:\n\n${userText}` }
                 ]
             })
         });
@@ -586,14 +940,9 @@ async function generateLayoutStreaming() {
         }
 
         updateStreamingUI(fullResponse, outputHtml, outputCss, outputSchema, previewFrame, true);
+        pushToHistory(outputHtml.textContent, outputCss.textContent, outputSchema.textContent);
 
-        if (!fullResponse.trim()) {
-            throw new Error('ИИ вернул пустой ответ. Проверьте API ключ или попробуйте другую модель.');
-        }
-
-        if (!fullResponse.includes('###HTML###') && !fullResponse.includes('###CSS###')) {
-            throw new Error('ИИ вернул ответ в неправильном формате (отсутствуют маркеры ###HTML### или ###CSS###). Попробуйте еще раз.');
-        }
+        if (!fullResponse.trim()) throw new Error('ИИ вернул пустой ответ.');
 
         genStatus.className = 'generation-status success';
         statusLabel.textContent = 'Готово!';
@@ -610,8 +959,6 @@ async function generateLayoutStreaming() {
     } finally {
         currentAbortController = null;
         generateBtn.disabled = false;
-        generateBtn.querySelector('.btn-text').classList.remove('hidden');
-        generateBtn.querySelector('.loader').classList.add('hidden');
         stopBtn.classList.add('hidden');
     }
 }
@@ -686,16 +1033,17 @@ async function refineLayoutStreaming(customMessage = null) {
                         - Текущий HTML: ${currentHtml}
                         - Текущий CSS: ${currentCss}
                         
-                        ПРАВИЛА ИСПРАВЛЕНИЯ:
+                        ПРАВИЛА ИСПРАВЛЕНИЯ (КРИТИЧЕСКИ ВАЖНО):
                         1. Сохраняй структуру БЭМ и классы из эталонов.
                         2. ${useSections ? 'ОБЯЗАТЕЛЬНО используй <section> как обертку.' : 'НЕ ИСПОЛЬЗУЙ <section>.'}
                         3. ${useContainer ? 'ОБЯЗАТЕЛЬНО используй контейнер-центровщик.' : 'НЕ ИСПОЛЬЗУЙ контейнер-центровщик.'}
-                        4. ${allowedHeadings.length > 0 ? 'ИСПОЛЬЗУЙ ТОЛЬКО следующие теги заголовков: ' + allowedHeadings.join(', ') + '.' : 'НЕ ИСПОЛЬЗУЙ теги заголовков.'}
-                        5. Вноси ТОЛЬКО те изменения, о которых просит пользователь. Сохраняй ВЕСЬ исходный текст, если не было команды его сократить.
-                        6. РАЗДЕЛЯЙ ответ строго маркерами: ###CSS###, ###HTML### и ###SCHEMA###.
-                        7. В блоке ###SCHEMA### ${schemaPrompt}
-                        8. В блоке ###CSS### пиши ТОЛЬКО дополнительные или измененные стили.
-                        6. Ответ должен быть ПОЛНЫМ кодом HTML и CSS.
+                        4. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать любые теги заголовков, кроме: ${allowedHeadings.length > 0 ? allowedHeadings.join(', ') : 'ЗАГОЛОВКИ ЗАПРЕЩЕНЫ'}.
+                        5. ИСПОЛЬЗУЙ ТОЛЬКО ТЕКСТ ПОЛЬЗОВАТЕЛЯ: "${userText}". Не придумывай свои названия компаний, адреса или контент, если их нет в исходном тексте.
+                        6. В блоке ###HTML### и ###CSS### возвращай ВЕСЬ КОД ПОЛНОСТЬЮ. 
+                        7. ЗАПРЕЩЕНО использовать комментарии типа "код остается без изменений" или "...". Если ты так напишешь, пользователь увидит пустой экран. Пиши каждую строчку кода от начала до конца.
+                        8. РАЗДЕЛЯЙ ответ строго маркерами: ###CSS###, ###HTML### и ###SCHEMA###.
+                        9. В блоке ###SCHEMA### ${schemaPrompt}
+                        10. Максимально сохраняй текущую структуру, если правка не требует её изменения. Вноси только точечные правки согласно пожеланию.
                         
                         ЭТАЛОН CSS:
                         ${goldenCss}
@@ -742,6 +1090,9 @@ async function refineLayoutStreaming(customMessage = null) {
         }
 
         updateStreamingUI(fullResponse, outputHtml, outputCss, outputSchema, previewFrame, true);
+        
+        // Сохраняем в историю
+        pushToHistory(outputHtml.textContent, outputCss.textContent, outputSchema.textContent);
 
         if (!fullResponse.trim()) {
             throw new Error('ИИ вернул пустой ответ при внесении правок.');
@@ -796,12 +1147,17 @@ function updateStreamingUI(text, htmlEl, cssEl, schemaEl, iframe, isFinal = fals
     html = html.replace(/```html|```/g, '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
     schema = schema.replace(/```json|```|<script type="application\/ld\+json">|<\/script>/g, '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 
-    if (html) htmlEl.textContent = html;
-    if (css) cssEl.textContent = css;
-    if (schema) schemaEl.textContent = schema;
-
     const now = Date.now();
-    if (now - lastIframeUpdate > 150 || isFinal) {
+    const shouldUpdateText = (now - (window._lastTextUpdate || 0) > 100) || isFinal;
+
+    if (shouldUpdateText) {
+        if (html) htmlEl.textContent = html;
+        if (css) cssEl.textContent = css;
+        if (schema) schemaEl.textContent = schema;
+        window._lastTextUpdate = now;
+    }
+
+    if (now - lastIframeUpdate > 400 || isFinal) {
         if (html || css) {
             iframe.srcdoc = `
                 <!DOCTYPE html>
@@ -810,6 +1166,9 @@ function updateStreamingUI(text, htmlEl, cssEl, schemaEl, iframe, isFinal = fals
                     <meta charset="UTF-8">
                     <style>
                         body { margin: 20px; font-family: -apple-system, sans-serif; background: #fff; color: #333; }
+                        /* Стили эталона */
+                        ${document.getElementById('golden-css')?.value || ''}
+                        /* Новые стили от ИИ */
                         ${css}
                     </style>
                 </head>
