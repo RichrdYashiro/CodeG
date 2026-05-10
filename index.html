@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,15 +9,18 @@
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
+        rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
 </head>
+
 <body>
     <div class="app-container">
         <header class="app-header">
             <div class="logo">
                 <span class="logo-icon">🚀</span>
-                <h1>AI Layout Assistant <span class="badge">Qwen Free</span></h1>
+                <h1>AI Layout Assistant <span class="badge">Gemini Free</span></h1>
             </div>
             <div class="header-actions">
                 <button id="settings-toggle" class="btn-secondary">
@@ -63,14 +67,19 @@
             </section>
 
             <!-- Правая панель -->
+            <div class="resizer" id="panel-resizer"></div>
+
             <section class="panel panel-output">
                 <!-- Новый статус-бар генерации -->
                 <div id="generation-status" class="generation-status idle">
                     <div class="status-content">
                         <span class="status-icon"></span>
                         <span class="status-label">Готов к работе</span>
+                        <span id="gen-timer" class="status-timer">0.0s</span>
                     </div>
-                    <div class="progress-bar"><div class="progress-fill"></div></div>
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
                 </div>
 
                 <div class="panel-header">
@@ -81,7 +90,7 @@
                         <button class="tab-btn" data-tab="schema">Schema</button>
                     </div>
                     <button id="copy-btn" class="btn-premium-copy">
-                        <span class="icon">📋</span> 
+                        <span class="icon">📋</span>
                         <span class="text">Копировать результат</span>
                     </button>
                 </div>
@@ -90,14 +99,34 @@
                         <iframe id="preview-frame" title="Preview"></iframe>
                     </div>
                     <div id="html-tab" class="tab-content">
-                        <div class="code-wrapper"><pre id="output-html"><code class="language-html"></code></pre></div>
+                        <div class="code-wrapper">
+                            <pre id="output-html"><code class="language-html"></code></pre>
+                        </div>
                     </div>
                     <div id="css-tab" class="tab-content">
-                        <div class="code-wrapper"><pre id="output-css"><code class="language-css"></code></pre></div>
+                        <div class="code-wrapper">
+                            <pre id="output-css"><code class="language-css"></code></pre>
+                        </div>
                     </div>
                     <div id="schema-tab" class="tab-content">
-                        <div class="code-wrapper"><pre id="output-schema"><code class="language-json"></code></pre></div>
+                        <div class="code-wrapper">
+                            <pre id="output-schema"><code class="language-json"></code></pre>
+                        </div>
                     </div>
+                </div>
+
+                <!-- Панель уточнения верстки -->
+                <div id="feedback-panel" class="feedback-section hidden">
+                    <div class="feedback-input-wrapper">
+                        <textarea id="feedback-text" placeholder="Что нужно исправить в этой верстке? (например: сделай шрифт больше или добавь отступы)"></textarea>
+                        <button id="refine-btn" class="btn-refine">
+                            <span class="btn-text">Исправить</span>
+                            <div class="loader hidden"><span></span><span></span><span></span></div>
+                        </button>
+                    </div>
+                    <button id="apply-config-btn" class="btn-apply-config hidden">
+                        <span class="icon">⚙️</span> Применить обновленные настройки конфигурации к текущему коду
+                    </button>
                 </div>
             </section>
         </main>
@@ -112,9 +141,104 @@
                 <button id="settings-close" class="btn-close">&times;</button>
             </div>
             <div class="modal-content">
+                <div id="modal-loading-overlay" class="modal-loading hidden">
+                    <div class="loader"><span></span><span></span><span></span></div>
+                    <p>ИИ анализирует и разделяет код...</p>
+                </div>
                 <div class="settings-grid">
                     <div class="settings-group full-width" style="display:none;">
                         <input type="password" id="api-key">
+                    </div>
+                    <div class="settings-group full-width">
+                        <div class="reference-upload-zone" id="ref-drop-zone">
+                            <span class="icon" style="font-size: 2rem;">📁</span>
+                            <div class="ref-upload-text">
+                                <strong>Загрузить эталон из файла</strong>
+                                <span>ИИ автоматически разделит код на HTML и CSS</span>
+                            </div>
+                            <input type="file" id="ref-upload-input" accept=".html,.css,.txt" hidden>
+                            <button id="ref-upload-btn" class="btn-secondary">Выбрать файл</button>
+                        </div>
+                    </div>
+                    <div class="settings-group full-width">
+                        <label>Типы SEO-схем (JSON-LD)</label>
+                        <div class="checkbox-grid" id="schema-checkboxes">
+                            <label class="checkbox-item">
+                                <input type="checkbox" value="auto">
+                                <span class="checkbox-custom"></span>
+                                <span class="checkbox-label">Авто-детект</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" value="Article">
+                                <span class="checkbox-custom"></span>
+                                <span class="checkbox-label">Article</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" value="Product">
+                                <span class="checkbox-custom"></span>
+                                <span class="checkbox-label">Product</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" value="FAQPage">
+                                <span class="checkbox-custom"></span>
+                                <span class="checkbox-label">FAQ</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" value="Review">
+                                <span class="checkbox-custom"></span>
+                                <span class="checkbox-label">Review</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" value="Organization">
+                                <span class="checkbox-custom"></span>
+                                <span class="checkbox-label">Organization</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="settings-group full-width">
+                        <label>Настройки структуры</label>
+                        <div class="checkbox-grid">
+                            <label class="checkbox-item">
+                                <input type="checkbox" id="use-sections">
+                                <span class="checkbox-custom"></span>
+                                <span class="checkbox-label">Использовать &lt;section&gt; обертку</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" id="use-container">
+                                <span class="checkbox-custom"></span>
+                                <span class="checkbox-label">Добавить .container (центровщик)</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="settings-group full-width">
+                        <label>Допустимые заголовки</label>
+                        <div class="checkbox-grid" id="heading-checkboxes">
+                            <label class="checkbox-item">
+                                <input type="checkbox" value="h1">
+                                <span class="checkbox-custom"></span>
+                                <span class="checkbox-label">H1</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" value="h2" checked>
+                                <span class="checkbox-custom"></span>
+                                <span class="checkbox-label">H2</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" value="h3" checked>
+                                <span class="checkbox-custom"></span>
+                                <span class="checkbox-label">H3</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" value="h4" checked>
+                                <span class="checkbox-custom"></span>
+                                <span class="checkbox-label">H4</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" value="h5" checked>
+                                <span class="checkbox-custom"></span>
+                                <span class="checkbox-label">H5</span>
+                            </label>
+                        </div>
                     </div>
                     <div class="settings-group">
                         <label>Эталонный CSS</label>
@@ -136,4 +260,5 @@
     <script src="config.js"></script>
     <script src="script.js"></script>
 </body>
+
 </html>
